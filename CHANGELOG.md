@@ -1,5 +1,11 @@
 # scep
 
+## 0.3.0-rc.1
+
+### Patch Changes
+
+- パッケージ管理方式を npm から pnpm に変更
+
 ## 0.3.0-rc.0
 
 ### Minor Changes

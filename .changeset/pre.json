@@ -5,6 +5,7 @@
     "scep-jwt": "0.2.2"
   },
   "changesets": [
+    "lovely-rooms-lose",
     "twelve-glasses-carry"
   ]
 }
