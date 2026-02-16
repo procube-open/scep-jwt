@@ -5,7 +5,7 @@
 Install the application dependencies by running:
 
 ```sh
-npm install
+pnpm install
 ```
 
 ## Development
@@ -13,7 +13,7 @@ npm install
 Start the application in development mode by running:
 
 ```sh
-npm run dev
+pnpm dev
 ```
 
 ## Production
@@ -21,6 +21,6 @@ npm run dev
 Build the application in production mode by running:
 
 ```sh
-npm run build
+pnpm build
 ```
 

@@ -7,6 +7,7 @@
 - ファイルの配布
 - クライアント毎の状態管理
 - 証明書の認証
+- JWT トークンの発行
 - 管理 API の提供
 - WebUI の提供
 
@@ -20,7 +21,7 @@
 go version go1.21.5 darwin/arm64
 mysql  Ver 8.3.0 for macos14.2 on arm64 (Homebrew)
 node v20.14.0
-npm 10.8.1
+pnpm 10.29.3
 Docker version 25.0.3, build 4debf41
 ```
 
@@ -28,6 +29,8 @@ Docker version 25.0.3, build 4debf41
 
 SCEP サーバではクライアントが証明書を発行する際に**シークレット**という使い捨てのパスワードを使用します。
 クライアントが SCEP、もしくは WebUI でシークレットを使用してクライアント証明書を発行すると、シークレットはその時点で削除されます。
+
+JWT 発行でも同様にシークレットを用いて発行します。JWT 用のシークレットは別テーブルで管理され、発行時に削除されます。
 
 ![概要図](/images/overview.png)
 
@@ -52,6 +55,8 @@ SCEP サーバは状態パラメータの値に応じて、そのクライアン
 概要図はこちら
 
 ![ステータス遷移図](/images/status.png)
+
+JWT の発行状態は `jwt_status` で管理され、状態遷移の考え方は証明書発行と同等です。
 
 ## 構築例
 
@@ -129,9 +134,10 @@ WebUI は React-Admin を利用して記述されており、`frontend`フォル
 
 ```
 cd frontend
-npm install
-npm install -g vite
-npm run build
+pnpm install
+pnpm install
+pnpm add -g vite
+pnpm build
 ```
 
 ビルド後、ブラウザから http://localhost:3000/caweb にアクセスすることができるようになります。
@@ -156,3 +162,19 @@ npm run build
 #### 証明書を発行する
 
 **証明書を #PKCS12 形式で発行**の欄から、先ほど作成したシークレットを入力し、任意のファイルパスワードを入力することで「**証明書発行**」ボタンが押せるようになります。これを押すことで証明書を発行し、p12 拡張子のファイルがブラウザでダウンロードすることができます。
+
+## JWT 発行
+
+JWT は専用の WebUI から発行します。UI は `frontend-jwt-publish` で管理され、ビルド後に http://localhost:3000/jwt-publish でアクセスできます。
+
+### JWT WebUI をビルドする
+
+```
+cd frontend-jwt-publish
+pnpm install
+pnpm build
+```
+
+### JWT を発行する
+
+管理 API でシークレットを作成した後、JWT WebUI で UID とシークレットを入力して **発行** を押すと JWT が表示されます。表示された JWT はコピーできます。

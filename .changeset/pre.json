@@ -1,0 +1,10 @@
+{
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "scep-jwt": "0.2.2"
+  },
+  "changesets": [
+    "twelve-glasses-carry"
+  ]
+}

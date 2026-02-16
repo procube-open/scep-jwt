@@ -36,6 +36,7 @@ func NewTableDepot(dsn, dirPath string) (*MySQLDepot, error) {
 	CREATE TABLE IF NOT EXISTS clients (
 		uid VARCHAR(255) NOT NULL PRIMARY KEY,
 		status VARCHAR(255) NOT NULL,
+		jwt_status VARCHAR(255) NOT NULL DEFAULT 'INACTIVE',
 		attributes TEXT DEFAULT NULL
 	);`
 	createCertsTableQuery := `
@@ -65,9 +66,33 @@ func NewTableDepot(dsn, dirPath string) (*MySQLDepot, error) {
 		pending_period VARCHAR(255) DEFAULT NULL,
 		FOREIGN KEY (target) REFERENCES clients(uid)
 	);`
+	createJWTSecretsTableQuery := `
+	CREATE TABLE IF NOT EXISTS jwt_secrets (
+		challenge VARCHAR(255) NOT NULL PRIMARY KEY,
+		secret VARCHAR(255) NOT NULL,
+		target VARCHAR(255) NOT NULL,
+		type VARCHAR(255) NOT NULL,
+		created_at TIMESTAMP NOT NULL,
+		delete_at TIMESTAMP NOT NULL,
+		pending_period VARCHAR(255) DEFAULT NULL,
+		FOREIGN KEY (target) REFERENCES clients(uid)
+	);`
+	createJWTTokensTableQuery := `
+	CREATE TABLE IF NOT EXISTS jwt_tokens (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		cn VARCHAR(255) NOT NULL,
+		token TEXT NOT NULL,
+		status CHAR(1) NOT NULL,
+		valid_from TIMESTAMP NOT NULL,
+		valid_till TIMESTAMP NOT NULL,
+		revocation_date TIMESTAMP DEFAULT NULL
+	);`
 
 	_, err = db.Exec(createClientsTableQuery)
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureJWTStatusColumn(db); err != nil {
 		return nil, err
 	}
 	_, err = db.Exec(createCertsTableQuery)
@@ -82,8 +107,31 @@ func NewTableDepot(dsn, dirPath string) (*MySQLDepot, error) {
 	if err != nil {
 		return nil, err
 	}
+	_, err = db.Exec(createJWTSecretsTableQuery)
+	if err != nil {
+		return nil, err
+	}
+	_, err = db.Exec(createJWTTokensTableQuery)
+	if err != nil {
+		return nil, err
+	}
 
 	return &MySQLDepot{db: db, dirPath: dirPath}, nil
+}
+
+func ensureJWTStatusColumn(db *sql.DB) error {
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'clients' AND COLUMN_NAME = 'jwt_status'",
+	).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err = db.Exec("ALTER TABLE clients ADD COLUMN jwt_status VARCHAR(255) NOT NULL DEFAULT 'INACTIVE'")
+	return err
 }
 
 func (d *MySQLDepot) CA(pass []byte) ([]*x509.Certificate, *rsa.PrivateKey, error) {

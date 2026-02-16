@@ -1,0 +1,17 @@
+{
+  "jwtweb": {
+    "title": "JWT トークンを発行",
+    "issue": "発行",
+    "success": "JWT を発行しました。",
+    "required": "ここを入力してください。",
+    "uid": "UID",
+    "secret": "ユーザパスワード",
+    "token": "JWT",
+    "no_token": "JWT を発行するとここに表示されます。",
+    "copied": "JWT をコピーしました。",
+    "copy_failed": "コピーに失敗しました。",
+    "expires": "有効期限",
+    "japanese": "日本語",
+    "english": "English"
+  }
+}

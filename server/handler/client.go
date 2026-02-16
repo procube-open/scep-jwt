@@ -14,6 +14,7 @@ import (
 type ResClient struct {
 	Uid        string                 `json:"uid"`
 	Status     string                 `json:"status"`
+	JwtStatus  string                 `json:"jwt_status"`
 	Attributes map[string]interface{} `json:"attributes"`
 }
 
@@ -33,6 +34,7 @@ func GetClientHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 		res := ResClient{
 			Uid:        c.Uid,
 			Status:     c.Status,
+			JwtStatus:  c.JwtStatus,
 			Attributes: c.Attributes,
 		}
 		b, _ := json.Marshal(res)
@@ -52,6 +54,7 @@ func ListClientHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 			list = append(list, ResClient{
 				Uid:        c.Uid,
 				Status:     c.Status,
+				JwtStatus:  c.JwtStatus,
 				Attributes: c.Attributes,
 			})
 		}

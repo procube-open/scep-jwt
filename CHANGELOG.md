@@ -1,5 +1,11 @@
 # scep
 
+## 0.3.0-rc.0
+
+### Minor Changes
+
+- JWT 発行機能を追加
+
 ## 0.2.2
 
 ### Patch Changes

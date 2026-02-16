@@ -29,6 +29,7 @@
     - [証明書一覧取得(GET `/api/cert/list/{CN}`)](#証明書一覧取得get-apicertlistcn)
     - [クライアント一覧取得(GET `/api/client`)](#クライアント一覧取得get-apiclient)
     - [クライアント単体取得(GET `/api/client/{CN}`)](#クライアント単体取得get-apiclientcn)
+    - [JWT 発行(POST `/api/jwt/issue`)](#jwt-発行post-apijwtissue)
   - [管理者 API](#管理者-api)
     - [ping(GET `/admin/api/ping`)](#pingget-adminapiping)
     - [証明書追加(POST `/admin/api/cert/add`)](#証明書追加post-adminapicertadd)
@@ -44,6 +45,8 @@
       - [リクエスト](#リクエスト-5)
     - [シークレット取得(GET `/admin/api/secret/get/{CN}`)](#シークレット取得get-adminapisecretgetcn)
       - [レスポンス](#レスポンス-2)
+    - [JWT シークレット作成(POST `/admin/api/jwt/secret/create`)](#jwt-シークレット作成post-adminapijwtsecretcreate)
+    - [JWT シークレット取得(GET `/admin/api/jwt/secret/get/{CN}`)](#jwt-シークレット取得get-adminapijwtsecretgetcn)
 
 # 環境変数一覧
 
@@ -66,6 +69,9 @@ SCEP サーバは以下の環境変数を参照します。
 | SCEPCA_ORG | "Procube" | 認証局の Organization |
 | SCEPCA_ORG_UNIT | "" | 認証局の Organization Unit |
 | SCEPCA_COUNTRY | "JP" | 認証局の Country |
+| JWT_ISSUER | "scep-jwt" | JWT の issuer |
+| JWT_AUDIENCE | "scep-jwt-clients" | JWT の audience |
+| JWT_TTL | "1h" | JWT の有効期限 |
 
 ## SCEP_DSN
 
@@ -172,6 +178,8 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 
 シークレットの有効期限が有効期限が現在日時以前のものが存在した場合、そのシークレットを削除します。
 
+JWT のシークレットも同様に有効期限を確認し、期限切れの場合は削除されます。
+
 # REST API
 
 対応する REST API を記述します。
@@ -263,6 +271,28 @@ SCEP サーバは以下のオペレーションをサポートしています。
 
 `/api/client/{CN}`では`{CN}`で指定された UID を持つクライアントを単体取得することができます。
 存在しない場合は`null`を返します。
+
+### JWT 発行(POST `/api/jwt/issue`)
+
+`/api/jwt/issue`では JWT を発行できます。
+
+#### リクエスト
+
+`Content-Type: application/json`で以下のパラメータを送信します。
+
+- uid
+- secret
+
+#### レスポンス
+
+JWT と有効期限を返します。
+
+```
+{
+  "token": "<jwt>",
+  "expires_at": "2026-02-16T08:12:36Z"
+}
+```
 
 ## 管理者 API
 
@@ -385,3 +415,11 @@ uid で指定した値をもつクライアントの attributes が指定した�
 secret はシークレットの文字列を表しており、type は INACTIVE から ISSUABLE への変化なら**ACTIVATE**が、ISSUED から UPDATABLE への変化なら**UPDATE**という文字列が入ります。
 
 delete_at は [シークレット作成](#リクエスト-4) 時の available_period から計算された UTC 時刻が入っており、pending_period は作成時のそのままの値が入っています。
+
+### JWT シークレット作成(POST `/admin/api/jwt/secret/create`)
+
+JWT 用のシークレットを作成します。パラメータは`/admin/api/secret/create`と同じです。
+
+### JWT シークレット取得(GET `/admin/api/jwt/secret/get/{CN}`)
+
+JWT 用のシークレットを取得します。レスポンス形式は`/admin/api/secret/get/{CN}`と同じです。
