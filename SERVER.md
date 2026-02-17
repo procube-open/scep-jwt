@@ -29,6 +29,7 @@
     - [証明書一覧取得(GET `/api/cert/list/{CN}`)](#証明書一覧取得get-apicertlistcn)
     - [クライアント一覧取得(GET `/api/client`)](#クライアント一覧取得get-apiclient)
     - [クライアント単体取得(GET `/api/client/{CN}`)](#クライアント単体取得get-apiclientcn)
+    - [JWT 検証(GET `/api/jwt/verify`)](#jwt-検証get-apijwtverify)
     - [JWT 発行(POST `/api/jwt/issue`)](#jwt-発行post-apijwtissue)
   - [管理者 API](#管理者-api)
     - [ping(GET `/admin/api/ping`)](#pingget-adminapiping)
@@ -70,7 +71,6 @@ SCEP サーバは以下の環境変数を参照します。
 | SCEPCA_ORG_UNIT | "" | 認証局の Organization Unit |
 | SCEPCA_COUNTRY | "JP" | 認証局の Country |
 | JWT_ISSUER | "scep-jwt" | JWT の issuer |
-| JWT_AUDIENCE | "scep-jwt-clients" | JWT の audience |
 | JWT_TTL | "1h" | JWT の有効期限 |
 
 ## SCEP_DSN
@@ -267,10 +267,27 @@ SCEP サーバは以下のオペレーションをサポートしています。
 `/api/client`では登録されているクライアントの一覧を取得することができます。
 存在しない場合は`null`を返します。
 
+各クライアントには以下の情報が含まれます。
+
+- uid
+- status
+- jwt_status
+- origin
+- attributes
+
 ### クライアント単体取得(GET `/api/client/{CN}`)
 
 `/api/client/{CN}`では`{CN}`で指定された UID を持つクライアントを単体取得することができます。
 存在しない場合は`null`を返します。
+
+レスポンスには`origin`が含まれます。
+
+### JWT 検証(GET `/api/jwt/verify`)
+
+`/api/jwt/verify`では貼付されたクライアント証明書を検証し、かつ対応するクライアントに有効な JWT が存在するかを確認します。
+検証に利用するクライアント証明書は URL エンコードして、リクエストヘッダの`X-Mtls-Clientcert`につけて送信して下さい。
+
+有効な JWT が存在する場合は、対応するクライアント情報を返します。
 
 ### JWT 発行(POST `/api/jwt/issue`)
 
@@ -286,6 +303,9 @@ SCEP サーバは以下のオペレーションをサポートしています。
 #### レスポンス
 
 JWT と有効期限を返します。
+
+JWT の audience には、発行対象クライアントの`origin`が利用されます。
+`origin`が空の場合、JWT は発行されずエラーを返します。
 
 ```
 {
@@ -334,9 +354,12 @@ cert_pem は登録したい PEM 形式のクライアント証明書を URL エ�
 リクエストに関して、`Content-Type`ヘッダは`application/json`として、リクエストボディは JSON で以下のパラメータを入力して下さい。
 
 - uid
+- origin
 - attributes
 
-uid は文字列で必須で、attributes はオブジェクト型であれば任意に設定でき、かつ SCEP サーバでこのパラメータを参照して特定の操作を行うことはありません。attributes パラメータが設定されていない場合は"{}"として登録されます。
+uid は文字列で必須です。origin は文字列で任意です。attributes はオブジェクト型であれば任意に設定でき、かつ SCEP サーバでこのパラメータを参照して特定の操作を行うことはありません。attributes パラメータが設定されていない場合は"{}"として登録されます。
+
+origin は JWT 発行時の audience として利用されます。
 
 ### クライアント失効(POST `/admin/api/client/revoke`)
 
@@ -363,16 +386,18 @@ uid は文字列で必須で、attributes はオブジェクト型であれば�
 
 ### クライアントアップデート(PUT `/admin/api/client/update`)
 
-`/admin/api/client/update`では指定されたクライアントの`attributes`パラメータの上書きをすることができます。
+`/admin/api/client/update`では指定されたクライアントの`attributes`パラメータの上書きと、`origin`の更新をすることができます。
 
 #### リクエスト
 
 リクエストに関して、`Content-Type`ヘッダは`application/json`として、リクエストボディは JSON で以下のパラメータを入力して下さい。
 
 - uid
+- origin
 - attributes
 
 uid で指定した値をもつクライアントの attributes が指定したものに置き換えられます。
+origin を指定した場合、その値に置き換えられます。
 
 ### シークレット作成(POST `/admin/api/secret/create`)
 

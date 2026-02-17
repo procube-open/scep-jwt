@@ -5,6 +5,7 @@
     "scep-jwt": "0.2.2"
   },
   "changesets": [
+    "better-gifts-attack",
     "lovely-rooms-lose",
     "twelve-glasses-carry"
   ]

@@ -1,5 +1,11 @@
 # scep
 
+## 0.3.0-rc.2
+
+### Patch Changes
+
+- client に origin 属性を追加
+
 ## 0.3.0-rc.1
 
 ### Patch Changes

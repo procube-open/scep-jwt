@@ -124,8 +124,31 @@ func IssueJWTHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 			return
 		}
 
+		client, err := depot.GetClient(info.Uid)
+		if err != nil {
+			res := ErrResp{Message: "Failed to get client"}
+			w.WriteHeader(http.StatusInternalServerError)
+			b, _ := json.Marshal(res)
+			w.Write(b)
+			return
+		}
+		if client == nil {
+			res := ErrResp{Message: "Client not found"}
+			w.WriteHeader(http.StatusUnauthorized)
+			b, _ := json.Marshal(res)
+			w.Write(b)
+			return
+		}
+		audience := strings.TrimSpace(client.Origin)
+		if audience == "" {
+			res := ErrResp{Message: "origin is required"}
+			w.WriteHeader(http.StatusBadRequest)
+			b, _ := json.Marshal(res)
+			w.Write(b)
+			return
+		}
+
 		issuer := utils.EnvString("JWT_ISSUER", "scep-jwt")
-		audience := utils.EnvString("JWT_AUDIENCE", "scep-jwt-clients")
 		ttlRaw := utils.EnvString("JWT_TTL", "1h")
 		ttl, err := time.ParseDuration(ttlRaw)
 		if err != nil {
@@ -186,6 +209,37 @@ func IssueJWTHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 		resp := jwtIssueResponse{Token: tokenStr, ExpiresAt: exp}
 		b, _ := json.Marshal(resp)
 		w.Header().Set("Content-Type", "application/json")
+		w.Write(b)
+	}
+}
+
+func JWTVerifyHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, client, verifyErr := verifyClientCertAndGetClient(depot, r)
+		if verifyErr != nil {
+			returnError(w, verifyErr.Message, verifyErr.Status)
+			return
+		}
+
+		hasValidToken, err := depot.HasValidJWTToken(client.Uid)
+		if err != nil {
+			returnError(w, "Failed to verify JWT token", http.StatusInternalServerError)
+			return
+		}
+		if !hasValidToken {
+			returnError(w, "No valid JWT token", http.StatusUnauthorized)
+			return
+		}
+
+		res := ResClient{
+			Uid:        client.Uid,
+			Status:     client.Status,
+			JwtStatus:  client.JwtStatus,
+			Origin:     client.Origin,
+			Attributes: client.Attributes,
+		}
+		b, _ := json.Marshal(res)
 		w.Write(b)
 	}
 }

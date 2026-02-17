@@ -15,6 +15,7 @@ type ResClient struct {
 	Uid        string                 `json:"uid"`
 	Status     string                 `json:"status"`
 	JwtStatus  string                 `json:"jwt_status"`
+	Origin     string                 `json:"origin"`
 	Attributes map[string]interface{} `json:"attributes"`
 }
 
@@ -35,6 +36,7 @@ func GetClientHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 			Uid:        c.Uid,
 			Status:     c.Status,
 			JwtStatus:  c.JwtStatus,
+			Origin:     c.Origin,
 			Attributes: c.Attributes,
 		}
 		b, _ := json.Marshal(res)
@@ -55,6 +57,7 @@ func ListClientHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 				Uid:        c.Uid,
 				Status:     c.Status,
 				JwtStatus:  c.JwtStatus,
+				Origin:     c.Origin,
 				Attributes: c.Attributes,
 			})
 		}
@@ -163,6 +166,14 @@ func RevokeClientHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 			w.Write(b)
 			return
 		}
+		if client.Status == "INACTIVE" && client.JwtStatus == "INACTIVE" {
+			res := ErrResp{Message: "Client is already in INACTIVE state"}
+			w.WriteHeader(http.StatusBadRequest)
+			b, _ := json.Marshal(res)
+			w.Write(b)
+			return
+		}
+
 		if client.Status != "INACTIVE" {
 			if client.Status != "ISSUABLE" {
 				if err := depot.RevokeCertificate(c.Uid, time.Now()); err != nil {
@@ -180,12 +191,25 @@ func RevokeClientHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-		} else {
-			res := ErrResp{Message: "Client is already in INACTIVE state"}
-			w.WriteHeader(http.StatusBadRequest)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
+		}
+
+		if client.JwtStatus != "INACTIVE" {
+			if client.JwtStatus != "ISSUABLE" {
+				if err := depot.RevokeJWTToken(c.Uid, time.Now()); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+			if client.JwtStatus == "ISSUABLE" || client.JwtStatus == "UPDATABLE" {
+				if err := depot.DeleteJWTSecret(c.Uid); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+			if err := depot.UpdateJWTStatusClient(c.Uid, "INACTIVE"); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
 		}
 	}
 }

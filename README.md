@@ -90,11 +90,14 @@ CLI でクライアント証明書を発行する場合は、[SCEP サーバの�
 
 クライアントの登録を行います。CLI で以下の curl を実行することで`"test"`という UID でクライアントの登録をすることができます。
 
+`origin`は JWT の audience として利用される値です。クライアント登録時は空でも構いませんが、JWT 発行時には空ではない必要があります。
+
 ```
 curl --location 'http://localhost:3000/admin/api/client/add' \
 --header 'Content-Type: application/json' \
 --data '{
     "uid": "test",
+    "origin": "example.com",
     "attributes": {"hoge": "fuga"}
 }'
 ```
@@ -178,3 +181,5 @@ pnpm build
 ### JWT を発行する
 
 管理 API でシークレットを作成した後、JWT WebUI で UID とシークレットを入力して **発行** を押すと JWT が表示されます。表示された JWT はコピーできます。
+
+JWT の audience は、発行対象クライアントの`origin`の値が利用されます。`origin`が空の場合、JWT 発行 API はエラーを返します。

@@ -137,6 +137,23 @@ func (d *MySQLDepot) PutJWTToken(uid string, token string, validFrom time.Time, 
 	return nil
 }
 
+func (d *MySQLDepot) RevokeJWTToken(uid string, revocationDate time.Time) error {
+	_, err := d.db.Exec("UPDATE jwt_tokens SET status = 'R', revocation_date = ? WHERE cn = ? AND status = 'V'", revocationDate, uid)
+	return err
+}
+
+func (d *MySQLDepot) HasValidJWTToken(uid string) (bool, error) {
+	var count int
+	err := d.db.QueryRow(
+		"SELECT COUNT(*) FROM jwt_tokens WHERE cn = ? AND status = 'V' AND valid_from <= NOW() AND valid_till > NOW()",
+		uid,
+	).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (d *MySQLDepot) CheckJWTTokenRevocation() error {
 	rows, err := d.db.Query("SELECT cn, id FROM jwt_tokens WHERE status = ? AND revocation_date IS NOT NULL AND revocation_date < NOW()", "V")
 	if err != nil {

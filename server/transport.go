@@ -64,6 +64,7 @@ func MakeHTTPHandler(depot *mysql.MySQLDepot, e *Endpoints, svc Service, logger 
 	r.Methods("POST").Path("/api/cert/pkcs12").HandlerFunc(handler.Pkcs12Handler(depot))
 
 	r.Methods("POST").Path("/api/jwt/issue").HandlerFunc(handler.IssueJWTHandler(depot))
+	r.Methods("GET").Path("/api/jwt/verify").HandlerFunc(handler.JWTVerifyHandler(depot))
 
 	r.Methods("GET").Path("/api/client").HandlerFunc(handler.ListClientHandler(depot))
 	r.Methods("GET").Path("/api/client/{CN}").HandlerFunc(handler.GetClientHandler(depot))
