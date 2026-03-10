@@ -4,13 +4,17 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/procube-open/scep/depot/mysql"
+	"github.com/procube-open/scep/hook"
 	"github.com/procube-open/scep/utils"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -24,6 +28,10 @@ type jwtIssueRequest struct {
 type jwtIssueResponse struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type jwtAddRequest struct {
+	Token string `json:"token"`
 }
 
 func CreateJWTSecretHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
@@ -205,11 +213,104 @@ func IssueJWTHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 			w.Write(b)
 			return
 		}
+		if err := hook.IssueJWTHook(info.Uid, exp.Format(time.RFC3339), tokenStr); err != nil {
+			res := ErrResp{Message: "Failed to execute JWT issue hook"}
+			w.WriteHeader(http.StatusInternalServerError)
+			b, _ := json.Marshal(res)
+			w.Write(b)
+			return
+		}
 
 		resp := jwtIssueResponse{Token: tokenStr, ExpiresAt: exp}
 		b, _ := json.Marshal(resp)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(b)
+	}
+}
+
+func AddJWTHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		var encodedToken jwtAddRequest
+		err := decoder.Decode(&encodedToken)
+		if err != nil {
+			returnError(w, "token is required", http.StatusInternalServerError)
+			return
+		}
+		if encodedToken.Token == "" {
+			returnError(w, "No token data", http.StatusInternalServerError)
+			return
+		}
+
+		decodedToken, err := url.PathUnescape(encodedToken.Token)
+		if err != nil {
+			returnError(w, "Failed to decode token", http.StatusInternalServerError)
+			return
+		}
+
+		caPass := utils.EnvString("SCEP_CA_PASS", "")
+		caCerts, _, err := depot.CA([]byte(caPass))
+		if err != nil || len(caCerts) == 0 {
+			returnError(w, "Failed to load CA certificate", http.StatusInternalServerError)
+			return
+		}
+
+		parsedToken, err := jwt.Parse(decodedToken, func(token *jwt.Token) (interface{}, error) {
+			if token.Method.Alg() != jwt.SigningMethodRS256.Alg() {
+				return nil, errors.New("unexpected signing method")
+			}
+			return caCerts[0].PublicKey, nil
+		})
+		if err != nil || !parsedToken.Valid {
+			returnError(w, "Failed to verify token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := parsedToken.Claims.(jwt.MapClaims)
+		if !ok {
+			returnError(w, "Failed to parse token", http.StatusInternalServerError)
+			return
+		}
+
+		uid, ok := claims["sub"].(string)
+		if !ok || strings.TrimSpace(uid) == "" {
+			returnError(w, "Token subject is required", http.StatusInternalServerError)
+			return
+		}
+
+		validTill, err := parseJWTClaimTime(claims["exp"])
+		if err != nil {
+			returnError(w, "Failed to parse token", http.StatusInternalServerError)
+			return
+		}
+
+		validFrom, err := parseJWTClaimTime(claims["nbf"])
+		if err != nil {
+			validFrom, err = parseJWTClaimTime(claims["iat"])
+			if err != nil {
+				returnError(w, "Failed to parse token", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		client, err := depot.GetClient(uid)
+		if err != nil {
+			returnError(w, "Failed to get client", http.StatusInternalServerError)
+			return
+		}
+		if client == nil {
+			returnError(w, "Client not found", http.StatusInternalServerError)
+			return
+		}
+		if client.JwtStatus != "ISSUABLE" && client.JwtStatus != "UPDATABLE" {
+			returnError(w, "Client is not in ISSUABLE or UPDATABLE state", http.StatusInternalServerError)
+			return
+		}
+
+		if err := depot.PutJWTToken(uid, decodedToken, validFrom, validTill); err != nil {
+			returnError(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
@@ -250,6 +351,25 @@ func randomHex(size int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
+}
+
+func parseJWTClaimTime(value interface{}) (time.Time, error) {
+	switch v := value.(type) {
+	case float64:
+		return time.Unix(int64(v), 0), nil
+	case int64:
+		return time.Unix(v, 0), nil
+	case int:
+		return time.Unix(int64(v), 0), nil
+	case json.Number:
+		n, err := strconv.ParseInt(string(v), 10, 64)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return time.Unix(n, 0), nil
+	default:
+		return time.Time{}, errors.New("invalid claim time")
+	}
 }
 
 func ioReadAll(r *http.Request) ([]byte, error) {

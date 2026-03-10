@@ -62,3 +62,22 @@ func AddClientHook(uid string) error {
 	}
 	return nil
 }
+
+func IssueJWTHook(uid string, expiresAt string, token string) error {
+	script := utils.EnvString("SCEP_JWT_ISSUE_SCRIPT", "")
+	if script == "" {
+		return nil
+	}
+	cmd := exec.Command(script)
+	cmd.Env = append(cmd.Env, "UID="+uid)
+	cmd.Env = append(cmd.Env, "EXPIRES_AT="+expiresAt)
+	cmd.Env = append(cmd.Env, "TOKEN="+token)
+	output, err := cmd.CombinedOutput()
+	if string(output) != "" {
+		fmt.Println(string(output))
+	}
+	if err != nil {
+		return err
+	}
+	return nil
+}

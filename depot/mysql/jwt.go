@@ -167,14 +167,18 @@ func (d *MySQLDepot) CheckJWTTokenRevocation() error {
 		if err != nil {
 			return err
 		}
+		if _, err = d.db.Exec("UPDATE jwt_tokens SET status = 'R' WHERE id = ?", id); err != nil {
+			return err
+		}
+
 		client, err := d.GetClient(cn)
 		if err != nil {
 			return err
 		}
 		if client.JwtStatus == "PENDING" {
-			_, err = d.db.Exec("UPDATE jwt_tokens SET status = 'R' WHERE id = ?", id)
-			d.db.Exec("UPDATE clients SET jwt_status = 'ISSUED' WHERE uid = ?", cn)
-			return err
+			if err := d.UpdateJWTStatusClient(cn, "ISSUED"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -193,14 +197,18 @@ func (d *MySQLDepot) CheckJWTTokenExpiration() error {
 		if err != nil {
 			return err
 		}
+		if _, err = d.db.Exec("UPDATE jwt_tokens SET status = 'R' WHERE id = ?", id); err != nil {
+			return err
+		}
+
 		client, err := d.GetClient(cn)
 		if err != nil {
 			return err
 		}
 		if client.JwtStatus == "ISSUED" {
-			_, err = d.db.Exec("UPDATE jwt_tokens SET status = 'R' WHERE id = ?", id)
-			d.db.Exec("UPDATE clients SET jwt_status = 'INACTIVE' WHERE uid = ?", cn)
-			return err
+			if err := d.UpdateJWTStatusClient(cn, "INACTIVE"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

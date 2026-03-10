@@ -7,6 +7,7 @@
   - [サーバ起動前](#サーバ起動前)
   - [クライアント作成後](#クライアント作成後)
   - [クライアント証明書発行後](#クライアント証明書発行後)
+  - [JWT 発行後](#jwt-発行後)
 - [クライアント実行ファイルをビルド](#クライアント実行ファイルをビルド)
   - [テンプレート](#テンプレート)
 - [バッチ処理](#バッチ処理)
@@ -36,6 +37,7 @@
     - [証明書追加(POST `/admin/api/cert/add`)](#証明書追加post-adminapicertadd)
       - [リクエスト](#リクエスト-1)
       - [エラーハンドリング](#エラーハンドリング)
+    - [JWT追加(POST `/admin/api/jwt/add`)](#jwt追加post-adminapijwtadd)
     - [クライアント追加(POST `/admin/api/client/add`)](#クライアント追加post-adminapiclientadd)
       - [リクエスト](#リクエスト-2)
     - [クライアント失効(POST `/admin/api/client/revoke`)](#クライアント失効post-adminapiclientrevoke)
@@ -63,6 +65,7 @@ SCEP サーバは以下の環境変数を参照します。
 | SCEP_INITIAL_SCRIPT | "" | サーバ起動時に実行されるシェルスクリプトのパス |
 | SCEP_ADD_CLIENT_SCRIPT | "" | クライアント作成時に実行されるシェルスクリプトのパス |
 | SCEP_SIGN_SCRIPT | "" | クライアント証明書発行時に実行されるシェルスクリプトのパス |
+| SCEP_JWT_ISSUE_SCRIPT | "" | JWT 発行時に実行されるシェルスクリプトのパス |
 | SCEP_SCRIPT_TIME_FORMAT | "2006-01-02 15:04:05" | シェルスクリプトに渡される日時のフォーマット |
 | SCEPCA_YEARS | "10" | ca.crt の有効期間(年) |
 | SCEPCA_KEY_SIZE | "4096" | ca.key のサイズ |
@@ -90,6 +93,7 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 - サーバ起動前
 - クライアント作成後
 - クライアント証明書発行後
+- JWT 発行後
 
 また、設定されていない場合は何も実行されません。
 
@@ -118,6 +122,15 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 
 `SCEP_SCRIPT_TIME_FORMAT`は「2006 年 1 月 2 日 15 時 4 分 5 秒 アメリカ山地標準時 MST(GMT-0700)」を表す時刻で記述して下さい。
 詳細については[こちら](https://pkg.go.dev/time#Time.Format)を参照して下さい。
+
+## JWT 発行後
+
+JWT 発行後に`SCEP_JWT_ISSUE_SCRIPT`で設定されたパスのシェルスクリプトを実行します。
+参照可能な引数は以下のとおりです。
+
+- `$UID`: 発行対象クライアント ID
+- `$EXPIRES_AT`: JWT の有効期限(RFC3339)
+- `$TOKEN`: 発行された JWT
 
 # クライアント実行ファイルをビルド
 
@@ -162,7 +175,7 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 
 # バッチ処理
 
-証明書の有効期限切れとシークレットの削除漏れの確認のために、SCEP サーバではバッチ処理を行っています。周期は`SCEP_TICKER`環境変数を参照しており、Golang の [time.ParseDuration](https://pkg.go.dev/time#ParseDuration)でパース可能な形で指定して下さい。
+証明書・JWT の有効期限切れとシークレットの削除漏れの確認のために、SCEP サーバではバッチ処理を行っています。周期は`SCEP_TICKER`環境変数を参照しており、Golang の [time.ParseDuration](https://pkg.go.dev/time#ParseDuration)でパース可能な形で指定して下さい。
 
 処理内容としては、具体的に以下の処理を行っています。
 
@@ -179,6 +192,16 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 シークレットの有効期限が有効期限が現在日時以前のものが存在した場合、そのシークレットを削除します。
 
 JWT のシークレットも同様に有効期限を確認し、期限切れの場合は削除されます。
+
+### JWT の失効日時確認
+
+JWT の失効日時(`revocation_date`)が現在日時以前のトークンが存在した場合、その JWT を無効化します。
+また、対象クライアントの `jwt_status` が `PENDING` の場合は `ISSUED` に遷移させます。
+
+### JWT の有効期限確認
+
+JWT の有効期限(`valid_till`)が現在日時以前のトークンが存在した場合、その JWT を無効化します。
+対象クライアントの `jwt_status` が `ISSUED` の場合は `INACTIVE` に遷移させます。
 
 # REST API
 
@@ -344,6 +367,29 @@ cert_pem は登録したい PEM 形式のクライアント証明書を URL エ�
 - クライアント証明書の CN と一致する UID を持つクライアントが存在すること
 - クライアントの状態が`ISSUABLE`もしくは`UPDATABLE`であること
 - 指定された証明書が CA 証明書で認証できること
+
+### JWT追加(POST `/admin/api/jwt/add`)
+
+`/admin/api/jwt/add`では指定された JWT を用いて、`/api/jwt/issue`で JWT を発行したときと同じ登録処理をサーバに実行させることができます。
+
+#### 入力パラメータ
+
+リクエストに関して、`Content-Type`ヘッダは`application/json`として、リクエストボディは JSON で以下のパラメータを入力して下さい。
+
+- token
+
+token は登録したい JWT 文字列を URL エンコードした文字列で指定して下さい。
+
+#### エラーハンドリング
+
+以下の条件に合致しなかったとき、この API はエラーを返します。
+
+- token パラメータが存在すること
+- token で指定された文字列が URL デコード可能であること
+- 指定された JWT が CA 証明書で署名検証できること
+- JWT に `sub` と `exp` が含まれていること（`nbf` が無い場合は `iat` が必要）
+- JWT の `sub` と一致する UID を持つクライアントが存在すること
+- クライアントの `jwt_status` が`ISSUABLE`もしくは`UPDATABLE`であること
 
 ### クライアント追加(POST `/admin/api/client/add`)
 

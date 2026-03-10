@@ -83,6 +83,7 @@ func MakeHTTPHandler(depot *mysql.MySQLDepot, e *Endpoints, svc Service, logger 
 
 	r.Methods("POST").Path("/admin/api/jwt/secret/create").HandlerFunc(handler.CreateJWTSecretHandler(depot))
 	r.Methods("GET").Path("/admin/api/jwt/secret/get/{CN}").HandlerFunc(handler.GetJWTSecretHandler(depot))
+	r.Methods("POST").Path("/admin/api/jwt/add").HandlerFunc(handler.AddJWTHandler(depot))
 	return r
 }
 

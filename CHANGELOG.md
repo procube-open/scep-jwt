@@ -1,5 +1,11 @@
 # scep
 
+## 0.3.0-rc.3
+
+### Patch Changes
+
+- 管理者用 JWT 発行 API を追加
+
 ## 0.3.0-rc.2
 
 ### Patch Changes
