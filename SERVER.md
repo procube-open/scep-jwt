@@ -316,6 +316,9 @@ SCEP サーバは以下のオペレーションをサポートしています。
 
 `/api/jwt/issue`では JWT を発行できます。
 
+この API で発行される JWT は、CA の秘密鍵を用いた RS256 署名です。
+また、公開鍵の配布に JWK Set を使う設計ではなく、JWKS エンドポイントも提供していません。JWT の検証や登録では CA 証明書の公開鍵を直接利用するため、JWKS には準拠していません。
+
 #### リクエスト
 
 `Content-Type: application/json`で以下のパラメータを送信します。
@@ -329,6 +332,16 @@ JWT と有効期限を返します。
 
 JWT の audience には、発行対象クライアントの`origin`が利用されます。
 `origin`が空の場合、JWT は発行されずエラーを返します。
+
+発行される JWT には以下のクレームが含まれます。
+
+- `iss`: issuer。環境変数`JWT_ISSUER`の値が使われます。
+- `aud`: audience。対象クライアントの`origin`が使われます。
+- `sub`: subject。発行対象クライアントの UID です。
+- `iat`: issued at。JWT の発行時刻です。
+- `nbf`: not before。JWT の有効開始時刻です。
+- `exp`: expiration time。JWT の有効期限です。
+- `jti`: JWT ID。サーバが生成するランダムなトークン識別子です。
 
 ```
 {
@@ -371,6 +384,9 @@ cert_pem は登録したい PEM 形式のクライアント証明書を URL エ�
 ### JWT追加(POST `/admin/api/jwt/add`)
 
 `/admin/api/jwt/add`では指定された JWT を用いて、`/api/jwt/issue`で JWT を発行したときと同じ登録処理をサーバに実行させることができます。
+
+登録対象の JWT は RS256 署名である必要があります。
+この API でも JWKS は利用せず、CA 証明書の公開鍵で署名検証を行います。そのため、JWK Set や JWKS エンドポイントを前提とした連携には対応していません。
 
 #### 入力パラメータ
 

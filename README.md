@@ -183,3 +183,20 @@ pnpm build
 管理 API でシークレットを作成した後、JWT WebUI で UID とシークレットを入力して **発行** を押すと JWT が表示されます。表示された JWT はコピーできます。
 
 JWT の audience は、発行対象クライアントの`origin`の値が利用されます。`origin`が空の場合、JWT 発行 API はエラーを返します。
+
+### CA 公開鍵で JWT を検証するサンプル
+
+管理 API でクライアント作成と JWT 用シークレット作成を行い、JWT 発行後に SCEP の GetCACert API で取得した CA 証明書から公開鍵を取り出して署名検証する Node.js サンプルを用意しています。
+
+```bash
+npm run verify:jwt-ca
+```
+
+このサンプルでは以下をまとめて確認します。
+
+- クライアント作成
+- JWT 用シークレット作成
+- JWT 発行
+- `/scep?operation=GetCACert` からの CA 証明書取得
+- CA 公開鍵を用いた JWT 署名検証
+- 改ざん JWT / audience 不一致 / 期限切れ相当 / CA 取得失敗
