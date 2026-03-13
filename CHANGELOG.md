@@ -1,5 +1,11 @@
 # scep
 
+## 0.3.0-rc.5
+
+### Patch Changes
+
+- JWT 発行画面に注意書きを追加
+
 ## 0.3.0-rc.4
 
 ### Patch Changes

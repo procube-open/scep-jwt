@@ -266,6 +266,9 @@ function App() {
             >
               {issuedToken || t("jwtweb.no_token")}
             </Typography>
+            <Typography variant="body2" sx={{ mt: 1, ml: 1, color: "warning.dark" }}>
+              {t("jwtweb.token_notice")}
+            </Typography>
           </Box>
           <IconButton
             aria-label="copy token"
