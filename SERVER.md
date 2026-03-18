@@ -7,6 +7,7 @@
   - [サーバ起動前](#サーバ起動前)
   - [クライアント作成後](#クライアント作成後)
   - [クライアント証明書発行後](#クライアント証明書発行後)
+  - [JWT 発行後](#jwt-発行後)
 - [クライアント実行ファイルをビルド](#クライアント実行ファイルをビルド)
   - [テンプレート](#テンプレート)
 - [バッチ処理](#バッチ処理)
@@ -29,11 +30,14 @@
     - [証明書一覧取得(GET `/api/cert/list/{CN}`)](#証明書一覧取得get-apicertlistcn)
     - [クライアント一覧取得(GET `/api/client`)](#クライアント一覧取得get-apiclient)
     - [クライアント単体取得(GET `/api/client/{CN}`)](#クライアント単体取得get-apiclientcn)
+    - [JWT 検証(GET `/api/jwt/verify`)](#jwt-検証get-apijwtverify)
+    - [JWT 発行(POST `/api/jwt/issue`)](#jwt-発行post-apijwtissue)
   - [管理者 API](#管理者-api)
     - [ping(GET `/admin/api/ping`)](#pingget-adminapiping)
     - [証明書追加(POST `/admin/api/cert/add`)](#証明書追加post-adminapicertadd)
       - [リクエスト](#リクエスト-1)
       - [エラーハンドリング](#エラーハンドリング)
+    - [JWT追加(POST `/admin/api/jwt/add`)](#jwt追加post-adminapijwtadd)
     - [クライアント追加(POST `/admin/api/client/add`)](#クライアント追加post-adminapiclientadd)
       - [リクエスト](#リクエスト-2)
     - [クライアント失効(POST `/admin/api/client/revoke`)](#クライアント失効post-adminapiclientrevoke)
@@ -44,6 +48,8 @@
       - [リクエスト](#リクエスト-5)
     - [シークレット取得(GET `/admin/api/secret/get/{CN}`)](#シークレット取得get-adminapisecretgetcn)
       - [レスポンス](#レスポンス-2)
+    - [JWT シークレット作成(POST `/admin/api/jwt/secret/create`)](#jwt-シークレット作成post-adminapijwtsecretcreate)
+    - [JWT シークレット取得(GET `/admin/api/jwt/secret/get/{CN}`)](#jwt-シークレット取得get-adminapijwtsecretgetcn)
 
 # 環境変数一覧
 
@@ -59,6 +65,7 @@ SCEP サーバは以下の環境変数を参照します。
 | SCEP_INITIAL_SCRIPT | "" | サーバ起動時に実行されるシェルスクリプトのパス |
 | SCEP_ADD_CLIENT_SCRIPT | "" | クライアント作成時に実行されるシェルスクリプトのパス |
 | SCEP_SIGN_SCRIPT | "" | クライアント証明書発行時に実行されるシェルスクリプトのパス |
+| SCEP_JWT_ISSUE_SCRIPT | "" | JWT 発行時に実行されるシェルスクリプトのパス |
 | SCEP_SCRIPT_TIME_FORMAT | "2006-01-02 15:04:05" | シェルスクリプトに渡される日時のフォーマット |
 | SCEPCA_YEARS | "10" | ca.crt の有効期間(年) |
 | SCEPCA_KEY_SIZE | "4096" | ca.key のサイズ |
@@ -66,6 +73,8 @@ SCEP サーバは以下の環境変数を参照します。
 | SCEPCA_ORG | "Procube" | 認証局の Organization |
 | SCEPCA_ORG_UNIT | "" | 認証局の Organization Unit |
 | SCEPCA_COUNTRY | "JP" | 認証局の Country |
+| JWT_ISSUER | "scep-jwt" | JWT の issuer |
+| JWT_TTL | "1h" | JWT の有効期限 |
 
 ## SCEP_DSN
 
@@ -84,6 +93,7 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 - サーバ起動前
 - クライアント作成後
 - クライアント証明書発行後
+- JWT 発行後
 
 また、設定されていない場合は何も実行されません。
 
@@ -112,6 +122,15 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 
 `SCEP_SCRIPT_TIME_FORMAT`は「2006 年 1 月 2 日 15 時 4 分 5 秒 アメリカ山地標準時 MST(GMT-0700)」を表す時刻で記述して下さい。
 詳細については[こちら](https://pkg.go.dev/time#Time.Format)を参照して下さい。
+
+## JWT 発行後
+
+JWT 発行後に`SCEP_JWT_ISSUE_SCRIPT`で設定されたパスのシェルスクリプトを実行します。
+参照可能な引数は以下のとおりです。
+
+- `$UID`: 発行対象クライアント ID
+- `$EXPIRES_AT`: JWT の有効期限(RFC3339)
+- `$TOKEN`: 発行された JWT
 
 # クライアント実行ファイルをビルド
 
@@ -156,7 +175,7 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 
 # バッチ処理
 
-証明書の有効期限切れとシークレットの削除漏れの確認のために、SCEP サーバではバッチ処理を行っています。周期は`SCEP_TICKER`環境変数を参照しており、Golang の [time.ParseDuration](https://pkg.go.dev/time#ParseDuration)でパース可能な形で指定して下さい。
+証明書・JWT の有効期限切れとシークレットの削除漏れの確認のために、SCEP サーバではバッチ処理を行っています。周期は`SCEP_TICKER`環境変数を参照しており、Golang の [time.ParseDuration](https://pkg.go.dev/time#ParseDuration)でパース可能な形で指定して下さい。
 
 処理内容としては、具体的に以下の処理を行っています。
 
@@ -171,6 +190,18 @@ SCEP_DSN="root@tcp(127.0.0.1:3306)/certs?parseTime=true&loc=Asia%2FTokyo"
 ### シークレットの有効期限確認
 
 シークレットの有効期限が有効期限が現在日時以前のものが存在した場合、そのシークレットを削除します。
+
+JWT のシークレットも同様に有効期限を確認し、期限切れの場合は削除されます。
+
+### JWT の失効日時確認
+
+JWT の失効日時(`revocation_date`)が現在日時以前のトークンが存在した場合、その JWT を無効化します。
+また、対象クライアントの `jwt_status` が `PENDING` の場合は `ISSUED` に遷移させます。
+
+### JWT の有効期限確認
+
+JWT の有効期限(`valid_till`)が現在日時以前のトークンが存在した場合、その JWT を無効化します。
+対象クライアントの `jwt_status` が `ISSUED` の場合は `INACTIVE` に遷移させます。
 
 # REST API
 
@@ -259,10 +290,65 @@ SCEP サーバは以下のオペレーションをサポートしています。
 `/api/client`では登録されているクライアントの一覧を取得することができます。
 存在しない場合は`null`を返します。
 
+各クライアントには以下の情報が含まれます。
+
+- uid
+- status
+- jwt_status
+- origin
+- attributes
+
 ### クライアント単体取得(GET `/api/client/{CN}`)
 
 `/api/client/{CN}`では`{CN}`で指定された UID を持つクライアントを単体取得することができます。
 存在しない場合は`null`を返します。
+
+レスポンスには`origin`が含まれます。
+
+### JWT 検証(GET `/api/jwt/verify`)
+
+`/api/jwt/verify`では貼付されたクライアント証明書を検証し、かつ対応するクライアントに有効な JWT が存在するかを確認します。
+検証に利用するクライアント証明書は URL エンコードして、リクエストヘッダの`X-Mtls-Clientcert`につけて送信して下さい。
+
+有効な JWT が存在する場合は、対応するクライアント情報を返します。
+
+### JWT 発行(POST `/api/jwt/issue`)
+
+`/api/jwt/issue`では JWT を発行できます。
+
+この API で発行される JWT は、CA の秘密鍵を用いた RS256 署名です。
+また、公開鍵の配布に JWK Set を使う設計ではなく、JWKS エンドポイントも提供していません。JWT の検証や登録では CA 証明書の公開鍵を直接利用するため、JWKS には準拠していません。
+
+#### リクエスト
+
+`Content-Type: application/json`で以下のパラメータを送信します。
+
+- uid
+- secret
+
+#### レスポンス
+
+JWT と有効期限を返します。
+
+JWT の audience には、発行対象クライアントの`origin`が利用されます。
+`origin`が空の場合、JWT は発行されずエラーを返します。
+
+発行される JWT には以下のクレームが含まれます。
+
+- `iss`: issuer。環境変数`JWT_ISSUER`の値が使われます。
+- `aud`: audience。対象クライアントの`origin`が使われます。
+- `sub`: subject。発行対象クライアントの UID です。
+- `iat`: issued at。JWT の発行時刻です。
+- `nbf`: not before。JWT の有効開始時刻です。
+- `exp`: expiration time。JWT の有効期限です。
+- `jti`: JWT ID。サーバが生成するランダムなトークン識別子です。
+
+```
+{
+  "token": "<jwt>",
+  "expires_at": "2026-02-16T08:12:36Z"
+}
+```
 
 ## 管理者 API
 
@@ -295,6 +381,32 @@ cert_pem は登録したい PEM 形式のクライアント証明書を URL エ�
 - クライアントの状態が`ISSUABLE`もしくは`UPDATABLE`であること
 - 指定された証明書が CA 証明書で認証できること
 
+### JWT追加(POST `/admin/api/jwt/add`)
+
+`/admin/api/jwt/add`では指定された JWT を用いて、`/api/jwt/issue`で JWT を発行したときと同じ登録処理をサーバに実行させることができます。
+
+登録対象の JWT は RS256 署名である必要があります。
+この API でも JWKS は利用せず、CA 証明書の公開鍵で署名検証を行います。そのため、JWK Set や JWKS エンドポイントを前提とした連携には対応していません。
+
+#### 入力パラメータ
+
+リクエストに関して、`Content-Type`ヘッダは`application/json`として、リクエストボディは JSON で以下のパラメータを入力して下さい。
+
+- token
+
+token は登録したい JWT 文字列を URL エンコードした文字列で指定して下さい。
+
+#### エラーハンドリング
+
+以下の条件に合致しなかったとき、この API はエラーを返します。
+
+- token パラメータが存在すること
+- token で指定された文字列が URL デコード可能であること
+- 指定された JWT が CA 証明書で署名検証できること
+- JWT に `sub` と `exp` が含まれていること（`nbf` が無い場合は `iat` が必要）
+- JWT の `sub` と一致する UID を持つクライアントが存在すること
+- クライアントの `jwt_status` が`ISSUABLE`もしくは`UPDATABLE`であること
+
 ### クライアント追加(POST `/admin/api/client/add`)
 
 `/admin/api/client/add`ではクライアントを登録することができます。成功した場合はレスポンスは空で、初期ステータスは"INACTIVE"として登録されます。
@@ -304,9 +416,12 @@ cert_pem は登録したい PEM 形式のクライアント証明書を URL エ�
 リクエストに関して、`Content-Type`ヘッダは`application/json`として、リクエストボディは JSON で以下のパラメータを入力して下さい。
 
 - uid
+- origin
 - attributes
 
-uid は文字列で必須で、attributes はオブジェクト型であれば任意に設定でき、かつ SCEP サーバでこのパラメータを参照して特定の操作を行うことはありません。attributes パラメータが設定されていない場合は"{}"として登録されます。
+uid は文字列で必須です。origin は文字列で任意です。attributes はオブジェクト型であれば任意に設定でき、かつ SCEP サーバでこのパラメータを参照して特定の操作を行うことはありません。attributes パラメータが設定されていない場合は"{}"として登録されます。
+
+origin は JWT 発行時の audience として利用されます。
 
 ### クライアント失効(POST `/admin/api/client/revoke`)
 
@@ -333,16 +448,18 @@ uid は文字列で必須で、attributes はオブジェクト型であれば�
 
 ### クライアントアップデート(PUT `/admin/api/client/update`)
 
-`/admin/api/client/update`では指定されたクライアントの`attributes`パラメータの上書きをすることができます。
+`/admin/api/client/update`では指定されたクライアントの`attributes`パラメータの上書きと、`origin`の更新をすることができます。
 
 #### リクエスト
 
 リクエストに関して、`Content-Type`ヘッダは`application/json`として、リクエストボディは JSON で以下のパラメータを入力して下さい。
 
 - uid
+- origin
 - attributes
 
 uid で指定した値をもつクライアントの attributes が指定したものに置き換えられます。
+origin を指定した場合、その値に置き換えられます。
 
 ### シークレット作成(POST `/admin/api/secret/create`)
 
@@ -385,3 +502,11 @@ uid で指定した値をもつクライアントの attributes が指定した�
 secret はシークレットの文字列を表しており、type は INACTIVE から ISSUABLE への変化なら**ACTIVATE**が、ISSUED から UPDATABLE への変化なら**UPDATE**という文字列が入ります。
 
 delete_at は [シークレット作成](#リクエスト-4) 時の available_period から計算された UTC 時刻が入っており、pending_period は作成時のそのままの値が入っています。
+
+### JWT シークレット作成(POST `/admin/api/jwt/secret/create`)
+
+JWT 用のシークレットを作成します。パラメータは`/admin/api/secret/create`と同じです。
+
+### JWT シークレット取得(GET `/admin/api/jwt/secret/get/{CN}`)
+
+JWT 用のシークレットを取得します。レスポンス形式は`/admin/api/secret/get/{CN}`と同じです。

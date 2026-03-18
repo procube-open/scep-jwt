@@ -1,7 +1,10 @@
 {
-    "name": "scep",
+    "name": "scep-jwt",
     "private": true,
-    "version": "0.2.2",
+    "version": "0.3.0",
+    "scripts": {
+        "verify:jwt-ca": "node examples/jwt-ca-verify.js"
+    },
     "devDependencies": {
         "@changesets/cli": "^2.27.1",
         "@procube/cs-tools": "^1.0.8"

@@ -147,6 +147,13 @@ func main() {
 
 			lginfo.Log("msg", "Checking secrets")
 			depot.CheckSecretExpiration()
+
+			lginfo.Log("msg", "Checking JWT tokens")
+			depot.CheckJWTTokenRevocation()
+			depot.CheckJWTTokenExpiration()
+
+			lginfo.Log("msg", "Checking JWT secrets")
+			depot.CheckJWTSecretExpiration()
 		}
 	}()
 

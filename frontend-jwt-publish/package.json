@@ -1,9 +1,9 @@
 {
-  "name": "scep-frontend",
+  "name": "scep-jwt-frontend",
   "version": "0.1.0",
   "packageManager": "pnpm@10.29.3",
   "private": true,
-  "homepage": "/publish",
+  "homepage": "/jwt-publish",
   "type": "module",
   "dependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",

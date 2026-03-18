@@ -12,7 +12,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -57,134 +56,21 @@ func returnError(w http.ResponseWriter, message string, status int) {
 
 func VerifyHandler(depot *mysql.MySQLDepot) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		type ErrResp_1 struct {
-			Message string `json:"message"`
-		}
-		type ErrResp_2 struct {
-			Message   string `json:"message"`
-			NotBefore string `json:"notBefore"`
-			NotAfter  string `json:"notAfter"`
-			Date      string `json:"Date"`
-		}
-		type ErrResp_3 struct {
-			Message     string `json:"message"`
-			Certificate string `json:"certificate"`
-			CaCert      string `json:"cacert"`
-		}
-		type ErrResp_4 struct {
-			Message string `json:"message"`
-			User    string `json:"user"`
-		}
-
-		encodedCert := r.Header["X-Mtls-Clientcert"]
 		w.Header().Set("Content-Type", "application/json")
-		if len(encodedCert) != 1 {
-			res := ErrResp_1{Message: "No Certificate"}
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(res)
-			w.Write(b)
+		_, client, verifyErr := verifyClientCertAndGetClient(depot, r)
+		if verifyErr != nil {
+			returnError(w, verifyErr.Message, verifyErr.Status)
 			return
 		}
-
-		decodedCert, err := url.PathUnescape(encodedCert[0])
-		if err != nil {
-			res := ErrResp_1{Message: "Decode header failed"}
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
+		res := ResClient{
+			Uid:        client.Uid,
+			Status:     client.Status,
+			JwtStatus:  client.JwtStatus,
+			Origin:     client.Origin,
+			Attributes: client.Attributes,
 		}
-
-		certBlock, _ := pem.Decode([]byte(decodedCert))
-		cert, err := x509.ParseCertificate(certBlock.Bytes)
-		if err != nil {
-			res := ErrResp_1{Message: "Parse Certificate failed"}
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		}
-
-		now := time.Now()
-		if now.After(cert.NotAfter) || now.Before(cert.NotBefore) {
-			res := ErrResp_2{
-				Message:   "Certificate is expired",
-				NotBefore: cert.NotBefore.String(),
-				NotAfter:  cert.NotAfter.String(),
-				Date:      now.String(),
-			}
-			w.WriteHeader(http.StatusUnauthorized)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		}
-
-		depotPath := utils.EnvString("SCEP_FILE_DEPOT", "ca-certs")
-		ca_crt, _ := os.ReadFile(depotPath + "/ca.crt")
-		caCertBlock, _ := pem.Decode(ca_crt)
-		caCert, _ := x509.ParseCertificate(caCertBlock.Bytes)
-		certPool := x509.NewCertPool()
-		certPool.AddCert(caCert)
-		opts := x509.VerifyOptions{
-			Roots:     certPool,
-			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-		}
-
-		if _, err := cert.Verify(opts); err != nil {
-			res := ErrResp_3{
-				Message:     "Failed to verify certificate",
-				Certificate: string(decodedCert),
-				CaCert:      string(ca_crt),
-			}
-			w.WriteHeader(http.StatusUnauthorized)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		}
-
-		rcs, err := depot.GetRCs()
-		if err != nil {
-			res := ErrResp_1{Message: "Failed to get RCs"}
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		}
-		if checkIfRevoked(cert, rcs) {
-			res := ErrResp_1{
-				Message: "Certificate is revoked",
-			}
-			w.WriteHeader(http.StatusUnauthorized)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		}
-
-		client, err := depot.GetClient(cert.Subject.CommonName)
-		if client == nil && err == nil {
-			res := ErrResp_4{
-				Message: "User Not Found",
-				User:    cert.Subject.CommonName,
-			}
-			w.WriteHeader(http.StatusUnauthorized)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		} else if err != nil {
-			res := ErrResp_1{Message: err.Error()}
-			w.WriteHeader(http.StatusInternalServerError)
-			b, _ := json.Marshal(res)
-			w.Write(b)
-			return
-		} else {
-			res := ResClient{
-				Uid:        client.Uid,
-				Status:     client.Status,
-				Attributes: client.Attributes,
-			}
-			b, _ := json.Marshal(res)
-			w.Write(b)
-		}
+		b, _ := json.Marshal(res)
+		w.Write(b)
 	}
 }
 

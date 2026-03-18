@@ -1,5 +1,6 @@
 {
   "name": "scep-frontend",
+  "packageManager": "pnpm@10.29.3",
   "private": true,
   "homepage": "/caweb",
   "scripts": {
@@ -12,6 +13,9 @@
   },
   "dependencies": {
     "@bicstone/ra-language-japanese": "^4.13.0",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.0",
+    "@mui/material": "^5.15.12",
     "@mui/x-date-pickers": "^7.7.0",
     "@vitejs/plugin-react": "^5.1.2",
     "dayjs": "^1.11.11",
@@ -19,6 +23,12 @@
     "react-admin": "^4.16.20",
     "react-dom": "^18.2.0",
     "react-icons": "^5.2.1",
+    "react-hook-form": "^7.51.0",
+    "react-query": "^3.39.3",
+    "react-router": "^6.30.3",
+    "react-router-dom": "^6.30.3",
+    "ra-i18n-polyglot": "^4.16.20",
+    "ra-language-english": "^4.16.20",
     "vite": "^7.3.0"
   },
   "devDependencies": {

@@ -72,17 +72,18 @@ func (d *MySQLDepot) CheckSecretExpiration() error {
 		if err != nil {
 			return err
 		}
-		if client.Status == "ISSUABLE" {
+		switch client.Status {
+		case "ISSUABLE":
 			_, err = d.db.Exec("UPDATE clients SET status = 'INACTIVE' WHERE uid = ?", target)
 			if err != nil {
 				return err
 			}
-		} else if client.Status == "UPDATABLE" {
+		case "UPDATABLE":
 			_, err = d.db.Exec("UPDATE clients SET status = 'ISSUED' WHERE uid = ?", target)
 			if err != nil {
 				return err
 			}
-		} else {
+		default:
 			return errors.New("client is not issuable or updatable")
 		}
 

@@ -49,6 +49,11 @@ func MakeHTTPHandler(depot *mysql.MySQLDepot, e *Endpoints, svc Service, logger 
 	r.Methods("GET").Path("/publish").HandlerFunc(handler.IndexHandler(frontendPublishPath))
 	r.Methods("GET").PathPrefix("/publish/").Handler(http.StripPrefix("/publish/", frontendPublishHandler))
 
+	frontendJWTPublishPath := "frontend-jwt-publish/build"
+	frontendJWTPublishHandler := http.FileServer(http.Dir(frontendJWTPublishPath))
+	r.Methods("GET").Path("/jwt-publish").HandlerFunc(handler.IndexHandler(frontendJWTPublishPath))
+	r.Methods("GET").PathPrefix("/jwt-publish/").Handler(http.StripPrefix("/jwt-publish/", frontendJWTPublishHandler))
+
 	downloadPath := utils.EnvString("SCEP_DOWNLOAD_PATH", "download")
 	downloadHandler := http.FileServer(http.Dir(downloadPath))
 	r.Methods("GET", "HEAD").PathPrefix("/api/download/").Handler(http.StripPrefix("/api/download/", downloadHandler))
@@ -57,6 +62,9 @@ func MakeHTTPHandler(depot *mysql.MySQLDepot, e *Endpoints, svc Service, logger 
 	r.Methods("GET").Path("/api/cert/verify").HandlerFunc(handler.VerifyHandler(depot))
 	r.Methods("GET").Path("/api/cert/list/{CN}").HandlerFunc(handler.CertsHandler(depot))
 	r.Methods("POST").Path("/api/cert/pkcs12").HandlerFunc(handler.Pkcs12Handler(depot))
+
+	r.Methods("POST").Path("/api/jwt/issue").HandlerFunc(handler.IssueJWTHandler(depot))
+	r.Methods("GET").Path("/api/jwt/verify").HandlerFunc(handler.JWTVerifyHandler(depot))
 
 	r.Methods("GET").Path("/api/client").HandlerFunc(handler.ListClientHandler(depot))
 	r.Methods("GET").Path("/api/client/{CN}").HandlerFunc(handler.GetClientHandler(depot))
@@ -72,6 +80,10 @@ func MakeHTTPHandler(depot *mysql.MySQLDepot, e *Endpoints, svc Service, logger 
 
 	r.Methods("POST").Path("/admin/api/secret/create").HandlerFunc(handler.CreateSecretHandler(depot))
 	r.Methods("GET").Path("/admin/api/secret/get/{CN}").HandlerFunc(handler.GetSecretHandler(depot))
+
+	r.Methods("POST").Path("/admin/api/jwt/secret/create").HandlerFunc(handler.CreateJWTSecretHandler(depot))
+	r.Methods("GET").Path("/admin/api/jwt/secret/get/{CN}").HandlerFunc(handler.GetJWTSecretHandler(depot))
+	r.Methods("POST").Path("/admin/api/jwt/add").HandlerFunc(handler.AddJWTHandler(depot))
 	return r
 }
 
