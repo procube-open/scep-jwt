@@ -1,5 +1,19 @@
 # scep
 
+## 0.3.0
+
+### Minor Changes
+
+- 9f3944a: JWT 発行機能を追加
+
+### Patch Changes
+
+- 0d622d1: client に origin 属性を追加
+- e10374e: JWT 発行画面に注意書きを追加
+- 587a117: 管理者用 JWT 発行 API を追加
+- 3d18711: 発行する JWT の仕様説明と検証用 javascript を追加
+- 93f9c2f: パッケージ管理方式を npm から pnpm に変更
+
 ## 0.3.0-rc.5
 
 ### Patch Changes
