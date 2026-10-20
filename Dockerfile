@@ -23,9 +23,8 @@ RUN pnpm install --frozen-lockfile
 COPY ./frontend-jwt-publish/. .
 RUN pnpm build
 
-FROM golang:1.25-alpine3.22
-RUN apk update
-RUN apk add make
+FROM golang:1.26.9-alpine3.23
+RUN apk upgrade --no-cache && apk add --no-cache make
 RUN mkdir /download
 WORKDIR /app
 COPY go.mod go.sum ./

@@ -92,11 +92,13 @@ func TestDecryptPKIEnvelopeCert(t *testing.T) {
 func TestSignCSR(t *testing.T) {
 	pkcsReq := loadTestFile(t, "testdata/PKCSReq.der")
 	msg := testParsePKIMessage(t, pkcsReq)
-	cacert, cakey := loadCACredentials(t)
-	err := msg.DecryptPKIEnvelope(cacert, cakey)
+	fixtureCert, fixtureKey := loadCACredentials(t)
+	err := msg.DecryptPKIEnvelope(fixtureCert, fixtureKey)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The fixture CA can decrypt historical requests but has expired for new signatures.
+	cacert, cakey := createCaCertWithKeyUsage(t, x509.KeyUsageCertSign|x509.KeyUsageDigitalSignature)
 	csr := msg.CSRReqMessage.CSR
 	id, err := cryptoutil.GenerateSubjectKeyID(csr.PublicKey)
 	if err != nil {
