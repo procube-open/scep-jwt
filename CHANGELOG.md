@@ -1,5 +1,11 @@
 # scep
 
+## 0.3.1
+
+### Patch Changes
+
+- b6a5209: 脆弱性対応
+
 ## 0.3.1-rc.0
 
 ### Patch Changes
